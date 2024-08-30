@@ -16,20 +16,30 @@ Uint32 mandelbrot(double real, double imag) {
         z = z * z + c;
     }
 
-    // Map iteration count to color
     Uint8 color = static_cast<Uint8>(iter % 256);
     return SDL_MapRGB(SDL_AllocFormat(SDL_PIXELFORMAT_RGB888), color, color, color);
+}
+
+void drawMandelbrot(SDL_Renderer* renderer, double x_min, double x_max, double y_min, double y_max) {
+    for (int y = 0; y < HEIGHT; ++y) {
+        for (int x = 0; x < WIDTH; ++x) {
+            double real = x_min + (x / (WIDTH - 1.0)) * (x_max - x_min);
+            double imag = y_min + (y / (HEIGHT - 1.0)) * (y_max - y_min);
+            Uint32 color = mandelbrot(real, imag);
+            SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, 255);
+            SDL_RenderDrawPoint(renderer, x, y);
+        }
+    }
 }
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_Window* window = SDL_CreateWindow("Mandelbrot Set",
+    SDL_Window* window = SDL_CreateWindow("Mandelbrot Zoom",
                                           SDL_WINDOWPOS_CENTERED,
                                           SDL_WINDOWPOS_CENTERED,
                                           WIDTH, HEIGHT,
                                           SDL_WINDOW_SHOWN);
-
     if (!window) {
         std::cerr << "Error creating window: " << SDL_GetError() << std::endl;
         SDL_Quit();
@@ -37,31 +47,53 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
 
-    Uint32* pixels = new Uint32[WIDTH * HEIGHT];
+    double x_min = -2.0, x_max = 1.0;
+    double y_min = -1.5, y_max = 1.5;
+    double zoom_factor = 1.0;
 
-    for (int y = 0; y < HEIGHT; ++y) {
-        for (int x = 0; x < WIDTH; ++x) {
-            double real = (x - WIDTH / 2.0) * 4.0 / WIDTH;
-            double imag = (y - HEIGHT / 2.0) * 4.0 / HEIGHT;
-            pixels[y * WIDTH + x] = mandelbrot(real, imag);
+    SDL_Event e;
+    bool running = true;
+    while (running) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                running = false;
+            } else if (e.type == SDL_KEYDOWN) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_UP:
+                        y_min += 0.1 * zoom_factor;
+                        y_max += 0.1 * zoom_factor;
+                        break;
+                    case SDLK_DOWN:
+                        y_min -= 0.1 * zoom_factor;
+                        y_max -= 0.1 * zoom_factor;
+                        break;
+                    case SDLK_LEFT:
+                        x_min -= 0.1 * zoom_factor;
+                        x_max -= 0.1 * zoom_factor;
+                        break;
+                    case SDLK_RIGHT:
+                        x_min += 0.1 * zoom_factor;
+                        x_max += 0.1 * zoom_factor;
+                        break;
+                    case SDLK_PLUS:
+                        zoom_factor *= 1.1;
+                        break;
+                    case SDLK_MINUS:
+                        zoom_factor /= 1.1;
+                        break;
+                }
+            }
         }
+
+        SDL_RenderClear(renderer);
+        drawMandelbrot(renderer, x_min, x_max, y_min, y_max);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(10); // Add a small delay to limit rendering speed
     }
 
-    SDL_UpdateTexture(texture, NULL, pixels, WIDTH * sizeof(Uint32));
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, texture, NULL, NULL);
-    SDL_RenderPresent(renderer);
-
-    SDL_Delay(5000); // Display the window for 5 seconds
-
-    // Clean up
-    delete[] pixels;
-    SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-
     return 0;
 }
